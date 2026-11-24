@@ -12,6 +12,15 @@ mod translate;
 use std::path::PathBuf;
 
 use anyhow::Result;
+
+/// D3D12 Agility SDK runtime (`D3D12\D3D12Core.dll` next to the exe): Windows 10's in-box
+/// D3D12 stops at shader model 6.5 and refuses the directly indexed heaps the title's root
+/// signatures use (#84, #753).
+#[unsafe(no_mangle)]
+pub static D3D12SDKVersion: u32 = 620;
+#[unsafe(no_mangle)]
+pub static D3D12SDKPath: &[u8; 9] = &[0x2E, 0x5C, 0x44, 0x33, 0x44, 0x31, 0x32, 0x5C, 0x00]; // ".\D3D12\\"
+
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]

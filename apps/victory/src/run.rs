@@ -122,6 +122,13 @@ pub fn run(
     victory_hle::runtime::set_title_dll_loader(Box::new(move |file| {
         late.load(file, show).map_err(|e| format!("{e:#}"))
     }));
+    // Some dumps start in an `.xbld` stub that finds its own image as the
+    // first module of the loader list (PEB -> Ldr -> InMemoryOrderModuleList
+    // -> DllBase) and calls into it by RVA: that entry must be the title's,
+    // not ours, or the stub jumps into victory.exe at the title's offsets.
+    // SAFETY: the PEB and the loader's first module entry are ours to read
+    // and write; nothing else runs yet.
+    unsafe { make_title_first_module(image.base()) };
     // SAFETY: imports are bound; from here on we run title code.
     let main = unsafe { Arc::new(image).spawn_main(dlls)? };
     let code = main
@@ -341,4 +348,25 @@ mod tests {
 #[cfg(not(windows))]
 pub fn run(_: &Path, _: Unimplemented, _: bool, _: bool, _: Console) -> Result<()> {
     anyhow::bail!("running titles requires Windows")
+}
+
+/// The loader's first module (the process's main image) as `base`: the
+/// `DllBase` of the first InMemoryOrderModuleList entry.
+#[cfg(windows)]
+unsafe fn make_title_first_module(base: usize) {
+    if std::env::var("VICTORY_TITLE_FIRST_MODULE").as_deref() == Ok("0") {
+        return;
+    }
+    let peb: usize;
+    // SAFETY: gs:[0x60] is this thread's PEB on x64 Windows.
+    unsafe { std::arch::asm!("mov {}, gs:[0x60]", out(reg) peb, options(nostack, readonly, preserves_flags)) };
+    // SAFETY: PEB+0x18 Ldr; Ldr+0x20 InMemoryOrderModuleList.Flink (an
+    // entry's links at +0x10, its DllBase at +0x30).
+    unsafe {
+        let ldr = *((peb + 0x18) as *const usize);
+        let first = *((ldr + 0x20) as *const usize);
+        let dll_base = (first + 0x20) as *mut usize;
+        println!("main module    {:#x} -> {base:#x} (loader list)", *dll_base);
+        *dll_base = base;
+    }
 }
