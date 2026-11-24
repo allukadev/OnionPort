@@ -10,6 +10,8 @@ use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
 /// First 16 hex digits of the BLAKE3 of the Series X 1.0.2.1 executable.
 const BUILD_1_0_2_1: &str = "b99f876b74d4a77f";
+/// The same build dumped with its `.xbld` start-up stub (local): same code at the same RVAs.
+const BUILD_1_0_2_1_XBLD: &str = "f36dea98c6f0eac8";
 
 /// Environment variable that turns the watchdog hook on.
 pub(crate) const NO_WATCHDOG_ENV: &str = "VICTORY_NO_WATCHDOG";
@@ -52,7 +54,8 @@ const WATCHDOG: &[Patch] = &[
 /// `base` is the mapped image whose original BLAKE3 is `hash`, and no title
 /// code is running yet.
 pub(crate) unsafe fn disarm_watchdog(base: usize, hash: &blake3::Hash) -> usize {
-    if !hash.to_hex().starts_with(BUILD_1_0_2_1) {
+    let hex = hash.to_hex();
+    if !hex.starts_with(BUILD_1_0_2_1) && !hex.starts_with(BUILD_1_0_2_1_XBLD) {
         return 0;
     }
     WATCHDOG
